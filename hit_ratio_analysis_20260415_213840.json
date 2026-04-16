@@ -1,0 +1,42 @@
+[
+  {
+    "algorithm": "MAB_Contextual",
+    "alpha": 1.0,
+    "time_slots": 20,
+    "vehicle_hit_ratio": 7.294865007940709,
+    "uav_hit_ratio": 91.7815344603381,
+    "bs_hit_ratio": 0.0,
+    "overall_hit_ratio": 31.738148984198645,
+    "vehicle_cache_ratio": 0.6129398410896708,
+    "uav_cache_ratio": 89.94271164863144,
+    "bs_cache_ratio": 0.0,
+    "overall_cache_ratio": 68.27880512091038,
+    "raw_data": {
+      "vehicle": {
+        "cache_hits": 54,
+        "cache_requests": 8810,
+        "source_hits": 635,
+        "total_requests": 9445
+      },
+      "uav": {
+        "cache_hits": 2826,
+        "cache_requests": 3142,
+        "source_hits": 294,
+        "sagin_hits": 409,
+        "total_requests": 3845
+      },
+      "bs": {
+        "cache_hits": 0,
+        "cache_requests": 0,
+        "source_hits": 0,
+        "total_requests": 0
+      },
+      "overall": {
+        "total_cache_hits": 2880,
+        "total_source_hits": 1338,
+        "total_content_hits": 4218,
+        "total_requests": 13290
+      }
+    }
+  }
+]

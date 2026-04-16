@@ -1,0 +1,2 @@
+Algorithm,Alpha,Time_Slots,vehicle_hit_ratio,uav_hit_ratio,bs_hit_ratio,overall_hit_ratio,vehicle_cache_ratio,uav_cache_ratio,bs_cache_ratio,overall_cache_ratio,Vehicle_Cache_Hits,UAV_Cache_Hits,BS_Cache_Hits,Total_Cache_Hits,Total_Requests
+MAB_Contextual,1.0,10,8.955555555555556,86.49334178820546,0.0,29.076847128517358,0.0,83.88804841149773,0.0,62.76174306734579,0,1109,0,1109,6077
