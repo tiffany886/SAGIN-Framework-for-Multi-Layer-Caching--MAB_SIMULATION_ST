@@ -7,7 +7,8 @@ import numpy as np
 
 
 class UAV:
-    def __init__(self, uav_id, grid_size, uav_grid_size, aggregator, algorithm="MAB_Contextual"):
+    def __init__(self, uav_id, grid_size, uav_grid_size, aggregator, algorithm="MAB_Contextual",
+                 energy_lambda=0.0):
         # Existing initialization
         self.uav_id = uav_id
         self.grid_size = grid_size
@@ -23,7 +24,9 @@ class UAV:
         self._period_seen_keys = set()
 
         # ✅ NEW: Algorithm selection
-        self.algorithm = algorithm
+        self.algorithm = str(algorithm).strip()
+        self.energy_lambda = energy_lambda
+        self.max_energy_per_request = 100.0
         print(f"  📦 {self.uav_id} initialized with {self.algorithm} algorithm")
 
         # Action space and learning components
@@ -89,8 +92,51 @@ class UAV:
                     'avg_reward': 0.0,  # Start at 0
                     'content_hit': 0,  # Hit counter
                     'no_f_time_cached': 0,  # Selection counter
-                    'total_requests': 0  # Request counter
+                    'total_requests': 0,  # Request counter
+                    'energy_sum': 0.0,
+                    'energy_count': 0,
                 }
+
+    def _ensure_record_structure(self, entity_type, coord, category, content_no):
+        if entity_type not in self.record:
+            self.record[entity_type] = {}
+        if coord not in self.record[entity_type]:
+            self.record[entity_type][coord] = {}
+        if category not in self.record[entity_type][coord]:
+            self.record[entity_type][coord][category] = {}
+        if content_no not in self.record[entity_type][coord][category]:
+            self.record[entity_type][coord][category][content_no] = {
+                'weighted_request_tracking': 0,
+                'request_tracking': 0,
+                'content_hit': 0,
+                'q_value': 0.0,
+                'avg_reward': 0.0,
+                'no_f_time_cached': 0,
+                'slot': 0,
+                'cache_path_reqs': 0,
+                'cache_hit_delay_sum': 0.0,
+                'cache_hit_delay_count': 0,
+                'energy_sum': 0.0,
+                'energy_count': 0,
+            }
+
+        entry = self.record[entity_type][coord][category][content_no]
+        entry.setdefault('cache_path_reqs', 0)
+        entry.setdefault('cache_hit_delay_sum', 0.0)
+        entry.setdefault('cache_hit_delay_count', 0)
+        entry.setdefault('energy_sum', 0.0)
+        entry.setdefault('energy_count', 0)
+
+    def _capture_energy_metrics(self, communication, content_request, retrieval_source):
+        energy_joule, normalized_energy, effective_hops = communication.compute_retrieval_energy(
+            content_request, retrieval_source
+        )
+        content_request['retrieval_source'] = retrieval_source
+        content_request['energy_joule'] = energy_joule
+        content_request['energy_cost_joule'] = energy_joule
+        content_request['normalized_energy'] = normalized_energy
+        content_request['effective_hops'] = effective_hops
+        return energy_joule, normalized_energy, effective_hops
 
     def cache_cleanup(self, current_time):
         """
@@ -306,6 +352,8 @@ class UAV:
                 'cache_path_reqs': 0,  # NEW (attempts of cache path)
                 'cache_hit_delay_sum': 0.0,
                 'cache_hit_delay_count': 0,
+                'energy_sum': 0.0,
+                'energy_count': 0,
             }
 
         entry = self.record[requested_entity_type][requested_coord][requested_category][requested_content_no]
@@ -325,12 +373,19 @@ class UAV:
 
                             self.content_hit_for_direct_uav += 1
                             self.content_hit_source_uav_1st_hop += 1
-                            use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                            use_federated = self.algorithm in [
+                                "Federated_MAB",
+                                "Federated_MAB_EnergyAware",
+                                "Enhanced_Federated_MAB",
+                                "Enhanced_Federated_MAB_EnergyAware",
+                            ]
                             requesting_vehicle.update_action_space(content, slot, federated_update=use_federated)
 
                             # generated path: DO NOT count as cache-path attempt
-                            self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                   from_cache=False)
+                            energy_joule, _, _ = self._capture_energy_metrics(communication, content_request, 'uav')
+                            self.track_content_hit(communication, content_request, content, slot,
+                                                   observed_delay_ms=seg_delay_s * 1000.0,
+                                                   from_cache=False, energy_joule=energy_joule)
                             return content
                 else:
                     print(
@@ -349,13 +404,20 @@ class UAV:
 
                                     self.content_hit_for_sagin_links += 1
                                     self.content_hit_source_uav_2nd_hop += 1
-                                    use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                                    use_federated = self.algorithm in [
+                                        "Federated_MAB",
+                                        "Federated_MAB_EnergyAware",
+                                        "Enhanced_Federated_MAB",
+                                        "Enhanced_Federated_MAB_EnergyAware",
+                                    ]
                                     requesting_vehicle.update_action_space(content, slot,
                                                                            federated_update=use_federated)
 
                                     # still generated path: DO NOT count as cache-path attempt
-                                    self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                           from_cache=False)
+                                    energy_joule, _, _ = self._capture_energy_metrics(communication, content_request, 'uav')
+                                    self.track_content_hit(communication, content_request, content, slot,
+                                                           observed_delay_ms=seg_delay_s * 1000.0,
+                                                           from_cache=False, energy_joule=energy_joule)
                                     return content
 
                 # queue to fetch later if not found immediately (not a cache-path attempt)
@@ -392,13 +454,20 @@ class UAV:
                                     communication.content_received_time = content_request['time_spent'] + seg_delay_s
 
                                 # cache hit → count hit + delay for cached-only reward
-                                self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                       from_cache=True)
+                                energy_joule, _, _ = self._capture_energy_metrics(communication, content_request, 'uav')
+                                self.track_content_hit(communication, content_request, content, slot,
+                                                       observed_delay_ms=seg_delay_s * 1000.0,
+                                                       from_cache=True, energy_joule=energy_joule)
                                 communication.content_hit += 1
                                 self.content_hit += 1
                                 self.content_hit_cache_1st_hop += 1
 
-                                use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                                use_federated = self.algorithm in [
+                                    "Federated_MAB",
+                                    "Federated_MAB_EnergyAware",
+                                    "Enhanced_Federated_MAB",
+                                    "Enhanced_Federated_MAB_EnergyAware",
+                                ]
                                 requesting_vehicle.update_action_space(content, slot, federated_update=use_federated)
                                 return content
 
@@ -419,12 +488,20 @@ class UAV:
                                         communication.content_received_time = content_request[
                                                                                   'time_spent'] + seg_delay_s
 
-                                    self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                           from_cache=True)
+                                    energy_joule, _, _ = self._capture_energy_metrics(communication, content_request,
+                                                                                     'uav')
+                                    self.track_content_hit(communication, content_request, content, slot,
+                                                           observed_delay_ms=seg_delay_s * 1000.0,
+                                                           from_cache=True, energy_joule=energy_joule)
                                     communication.content_hit += 1
                                     self.content_hit += 1
                                     self.content_hit_cache_2nd_hop += 1
-                                    use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                                    use_federated = self.algorithm in [
+                                        "Federated_MAB",
+                                        "Federated_MAB_EnergyAware",
+                                        "Enhanced_Federated_MAB",
+                                        "Enhanced_Federated_MAB_EnergyAware",
+                                    ]
                                     requesting_vehicle.update_action_space(content, slot,
                                                                            federated_update=use_federated)
                                     return content
@@ -444,9 +521,17 @@ class UAV:
                                 self.content_hit_source_sat_2nd_hop += 1
 
                                 # satellite → not cached path
-                                self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                       from_cache=False)
-                                use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                                energy_joule, _, _ = self._capture_energy_metrics(communication, content_request,
+                                                                                 'satellite')
+                                self.track_content_hit(communication, content_request, content, slot,
+                                                       observed_delay_ms=seg_delay_s * 1000.0,
+                                                       from_cache=False, energy_joule=energy_joule)
+                                use_federated = self.algorithm in [
+                                    "Federated_MAB",
+                                    "Federated_MAB_EnergyAware",
+                                    "Enhanced_Federated_MAB",
+                                    "Enhanced_Federated_MAB_EnergyAware",
+                                ]
                                 requesting_vehicle.update_action_space(content, slot, federated_update=use_federated)
                                 return content
 
@@ -478,7 +563,8 @@ class UAV:
             old_total = self.record[s_type][s_coord][s_category][s_no].get('total_requests', 0)
             self.record[s_type][s_coord][s_category][s_no]['total_requests'] = old_total + 1
 
-    def track_content_hit(self, content, slot, observed_delay_ms=None, from_cache=False):
+    def track_content_hit(self, communication, content_request, content, slot, observed_delay_ms=None,
+                          from_cache=False, energy_joule=None):
         """
         Increment hit counters and (optionally) cached-only delay accumulators.
         from_cache=True only for UAV local/neighbor cache hits.
@@ -488,28 +574,20 @@ class UAV:
         content_category = content['content_category']
         content_no = content['content_no']
 
-        if content_type not in self.record:
-            self.record[content_type] = {}
-        if content_coord not in self.record[content_type]:
-            self.record[content_type][content_coord] = {}
-        if content_category not in self.record[content_type][content_coord]:
-            self.record[content_type][content_coord][content_category] = {}
-        if content_no not in self.record[content_type][content_coord][content_category]:
-            self.record[content_type][content_coord][content_category][content_no] = {
-                'weighted_request_tracking': 0,
-                'request_tracking': 0,
-                'content_hit': 0,
-                'q_value': 0.0,
-                'avg_reward': 0.0,
-                'no_f_time_cached': 0,
-                'slot': 0,
-                'cache_path_reqs': 0,
-                'cache_hit_delay_sum': 0.0,
-                'cache_hit_delay_count': 0,
-            }
+        self._ensure_record_structure(content_type, content_coord, content_category, content_no)
 
         e = self.record[content_type][content_coord][content_category][content_no]
         e['slot'] = slot
+
+        if energy_joule is not None:
+            e['energy_sum'] = e.get('energy_sum', 0.0) + float(energy_joule)
+            e['energy_count'] = e.get('energy_count', 0) + 1
+            content_request['energy_joule'] = float(energy_joule)
+            content_request['energy_cost_joule'] = float(energy_joule)
+            content_request['normalized_energy'] = min(
+                1.0,
+                float(energy_joule) / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+            )
 
         if from_cache:
             e['content_hit'] = e.get('content_hit', 0) + 1
@@ -566,7 +644,12 @@ class UAV:
                                                                               self.neighbors]]
 
         # Update the action space based on connected satellites
-        use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+        use_federated = self.algorithm in [
+            "Federated_MAB",
+            "Federated_MAB_EnergyAware",
+            "Enhanced_Federated_MAB",
+            "Enhanced_Federated_MAB_EnergyAware",
+        ]
         self.update_action_space(satellite_list, non_neighbor_uavs, slot, federated_update=use_federated )
 
         # Select an action (which content to cache) based on the learned policy
@@ -829,11 +912,11 @@ class UAV:
             return self.select_action_popularity()
         elif self.algorithm == "MAB_Original":
             return self.select_action_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.select_action_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.select_action_federated_mab()
-        elif self.algorithm == "Enhanced_Federated_MAB":
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
             return self.select_action_enhanced_federated_mab()
         else:
             print(f"  ⚠️ Unknown algorithm {self.algorithm}, defaulting to MAB_Contextual")
@@ -1756,11 +1839,11 @@ class UAV:
             return self.get_reward_popularity()
         elif self.algorithm == "MAB_Original":
             return self.get_reward_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.get_reward_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.get_reward_federated_mab()
-        elif self.algorithm == "Enhanced_Federated_MAB":
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
             return self.get_reward_enhanced_federated_mab()  # ✅ ADD THIS LINE
         else:
             print(f"  ⚠️ Unknown algorithm {self.algorithm}, defaulting to MAB_Contextual")
@@ -1852,7 +1935,12 @@ class UAV:
                         s = self._get_cache_size_ratio(ctype, ccat, cno)
                         s_norm = min(1.0, s)
 
-                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm)))
+                        avg_energy = float(e.get('energy_sum', 0.0)) / max(1, int(e.get('energy_count', 0)))
+                        energy_penalty = getattr(self, 'energy_lambda', 0.0) * (
+                            avg_energy / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+                        )
+
+                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm))) - energy_penalty
 
                         old = float(e.get('avg_reward', 0.0))
                         new = old + lr * (reward - old)

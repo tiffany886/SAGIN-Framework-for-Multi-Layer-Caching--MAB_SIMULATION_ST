@@ -85,6 +85,34 @@ class Communication:
             'alpha_used': [],
         }
 
+        # Energy-aware model defaults (units: power=W, rate=Mbps, size=MB, energy=J)
+        self.link_power_w = {
+            'satellite': 5.0,
+            'uav': 2.0,
+            'vehicle_bs': 0.8,
+            'gs': 3.0,
+            'local': 0.0,
+        }
+        self.link_rate_mbps = {
+            'satellite': 10.0,
+            'uav': 50.0,
+            'vehicle_bs': 20.0,
+            'gs': 15.0,
+            'local': 1.0,
+        }
+        self.content_size_mb_map = {'I': 10.0, 'II': 1.0, 'III': 0.01, 'IV': 2.0}
+        # Recommended cap from worst-case estimate: 10MB, 2 hops, sat 5W@10Mbps -> ~80J.
+        self.max_energy_per_request = 100.0
+
+        # Global energy tracking for post-simulation metrics.
+        self.total_energy_consumed = 0.0
+        self.energy_samples = 0
+        self.source_energy_breakdown = defaultdict(float)
+        self.last_energy_cost = 0.0
+        self.last_energy_norm = 0.0
+        self.last_energy_hops = 0
+        self.last_retrieval_source = 'unknown'
+
 
 
         print(f"🎯 Communication initialized with alpha={self.alpha:.2f}")
@@ -304,6 +332,9 @@ class Communication:
         self.zipf_analysis['entity_requests'][entity_type] += 1
         self.zipf_analysis['category_requests'][content_category] += 1
 
+        # Keep request payload size (MB) for energy calculations.
+        request['content_size_mb'] = float(self.content_size_mb_map.get(content_category, 1.0))
+
         # Periodic analysis
         if self.zipf_analysis['request_count'] % 1000 == 0:
             self.analyze_zipf_effectiveness()
@@ -475,6 +506,82 @@ class Communication:
             return self.grid_categories
         else:
             return ['II', 'III', 'IV']
+
+    def infer_retrieval_source(self, content_request):
+        """Infer coarse retrieval source for energy estimation."""
+        explicit_source = content_request.get('retrieval_source')
+        if explicit_source in self.link_power_w:
+            return explicit_source
+
+        req_type = content_request.get('type', 'grid')
+        hops = max(0, int(content_request.get('hop_count', 0)))
+
+        if hops == 0:
+            if req_type == 'grid':
+                return 'local'
+            if req_type == 'satellite':
+                return 'satellite'
+            if req_type == 'UAV':
+                return 'uav'
+            return 'vehicle_bs'
+        if req_type == 'satellite':
+            return 'satellite'
+        if req_type == 'UAV':
+            return 'uav'
+        if req_type == 'grid' and hops >= 2:
+            return 'gs'
+        return 'vehicle_bs'
+
+    def compute_retrieval_energy(self, content_request, retrieval_source):
+        """
+        Compute per-request retrieval energy with unit-consistent conversion.
+        time_sec = (size_MB * 8) / rate_Mbps
+        energy_J = power_W * time_sec * hops
+        """
+        category = content_request.get('category', 'II')
+        size_mb = float(content_request.get('content_size_mb', self.content_size_mb_map.get(category, 1.0)))
+        hops = max(0, int(content_request.get('hop_count', 0)))
+
+        source = retrieval_source if retrieval_source in self.link_power_w else 'vehicle_bs'
+        power_w = float(self.link_power_w.get(source, self.link_power_w['vehicle_bs']))
+        rate_mbps = max(1e-6, float(self.link_rate_mbps.get(source, self.link_rate_mbps['vehicle_bs'])))
+
+        fallback_hops = {
+            'local': 0,
+            'uav': 1,
+            'vehicle_bs': 1,
+            'satellite': 2,
+            'gs': 2,
+        }
+        effective_hops = hops if hops > 0 else fallback_hops.get(source, 1)
+
+        # Local generation/self-hit: no transmission hops, no energy cost.
+        if effective_hops == 0:
+            return 0.0, 0.0, 0
+
+        tx_time_sec = (size_mb * 8.0) / rate_mbps
+        energy_joule = power_w * tx_time_sec * effective_hops
+        normalized_energy = min(1.0, energy_joule / max(1e-6, self.max_energy_per_request))
+        return energy_joule, normalized_energy, effective_hops
+
+    def finalize_request_energy(self, content_request):
+        """Finalize and store energy metrics for a successful retrieval."""
+        retrieval_source = self.infer_retrieval_source(content_request)
+        energy_joule, normalized_energy, effective_hops = self.compute_retrieval_energy(content_request, retrieval_source)
+
+        content_request['retrieval_source'] = retrieval_source
+        content_request['energy_cost_joule'] = energy_joule
+        content_request['normalized_energy'] = normalized_energy
+        content_request['effective_hops'] = effective_hops
+
+        self.last_retrieval_source = retrieval_source
+        self.last_energy_cost = energy_joule
+        self.last_energy_norm = normalized_energy
+        self.last_energy_hops = effective_hops
+
+        self.total_energy_consumed += energy_joule
+        self.energy_samples += 1
+        self.source_energy_breakdown[retrieval_source] += energy_joule
 
     def track_retrieval_delay(self, content_request, retrieval_source='unknown'):
         """🔧 FIXED: Proper delay tracking with consistent time calculation"""
@@ -674,6 +781,7 @@ class Communication:
                         break
 
         if flag1 == 1:
+            self.finalize_request_energy(content_request)
             self.write_delay_file(element_type, requested_category)
 
 

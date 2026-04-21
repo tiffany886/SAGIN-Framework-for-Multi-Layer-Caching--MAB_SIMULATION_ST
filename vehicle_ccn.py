@@ -8,7 +8,8 @@ import numpy as np
 
 
 class Vehicle:
-    def __init__(self, vehicle_id, grid_size, vehicle_range, vehicle_speed, aggregator, algorithm="MAB_Contextual"):
+    def __init__(self, vehicle_id, grid_size, vehicle_range, vehicle_speed, aggregator, algorithm="MAB_Contextual",
+                 energy_lambda=0.0):
         # Existing initialization...
         self.vehicle_id = vehicle_id
         self.grid_size = grid_size
@@ -20,7 +21,9 @@ class Vehicle:
         self.transmission_rate = 6
 
         # ✅ NEW: Algorithm selection
-        self.algorithm = algorithm
+        self.algorithm = str(algorithm).strip()
+        self.energy_lambda = energy_lambda
+        self.max_energy_per_request = 100.0
         print(f"  🚗 {self.vehicle_id} initialized with {self.algorithm} algorithm")
 
         # Initialize location
@@ -264,7 +267,12 @@ class Vehicle:
             'size': content_size  # Include the content size based on category
         }
         self.content_hit_from_source += 1
-        use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+        use_federated = self.algorithm in [
+            "Federated_MAB",
+            "Federated_MAB_EnergyAware",
+            "Enhanced_Federated_MAB",
+            "Enhanced_Federated_MAB_EnergyAware",
+        ]
         self.update_action_space(content, slot, federated_update=use_federated)  # cache the content
         return content
 
@@ -288,13 +296,21 @@ class Vehicle:
                             seg_delay_s = (content_request['hop_count'] * random.uniform(0, 0.001)) + \
                                           (content_request['hop_count'] * (
                                                       (content['size'] * 8) / self.transmission_rate))
-                            self.track_content_hit(content, slot, observed_delay_ms=seg_delay_s * 1000.0,
-                                                   from_cache=True)
+                            energy_joule, normalized_energy, _ = communication.compute_retrieval_energy(
+                                content_request, 'vehicle_bs'
+                            )
+                            content_request['energy_joule'] = energy_joule
+                            content_request['energy_cost_joule'] = energy_joule
+                            content_request['normalized_energy'] = normalized_energy
+                            self.track_content_hit(content_request, content, slot,
+                                                   observed_delay_ms=seg_delay_s * 1000.0,
+                                                   from_cache=True, energy_joule=energy_joule)
                             print(f" Vehicle {self.vehicle_id} VEHICLE CACHE HIT")
                             return content
         return None
 
-    def track_content_hit(self, content, slot, observed_delay_ms=None, from_cache=False):
+    def track_content_hit(self, content_request, content, slot, observed_delay_ms=None, from_cache=False,
+                          energy_joule=None):
         """Enhanced content hit tracking for learning"""
         content_type = content['content_type']
         content_coord = content['content_coord']
@@ -321,10 +337,21 @@ class Vehicle:
                 'cache_path_reqs': 0,
                 'cache_hit_delay_sum': 0.0,
                 'cache_hit_delay_count': 0,
+                'energy_sum': 0.0,
+                'energy_count': 0,
             }
 
         e = self.record[content_type][content_coord][content_category][content_no]
         e['slot'] = slot
+        if energy_joule is not None:
+            e['energy_sum'] = e.get('energy_sum', 0.0) + float(energy_joule)
+            e['energy_count'] = e.get('energy_count', 0) + 1
+            content_request['energy_joule'] = float(energy_joule)
+            content_request['energy_cost_joule'] = float(energy_joule)
+            content_request['normalized_energy'] = min(
+                1.0,
+                float(energy_joule) / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+            )
         if from_cache:
             e['content_hit'] = e.get('content_hit', 0) + 1
             if observed_delay_ms is not None:
@@ -361,6 +388,8 @@ class Vehicle:
                 'cache_path_reqs': 0,
                 'cache_hit_delay_sum': 0.0,
                 'cache_hit_delay_count': 0,
+                'energy_sum': 0.0,
+                'energy_count': 0,
             }
         time_spent = (slot * 60) - content['generation_time']
         if self.request_receive > 0:
@@ -422,6 +451,8 @@ class Vehicle:
                                 'cache_path_reqs': 0,
                                 'cache_hit_delay_sum': 0.0,
                                 'cache_hit_delay_count': 0,
+                                'energy_sum': 0.0,
+                                'energy_count': 0,
 
                             }
                         time_spent = (slot * 60) - content['generation_time']
@@ -465,11 +496,11 @@ class Vehicle:
             return self.select_action_popularity()
         elif self.algorithm == "MAB_Original":
             return self.select_action_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.select_action_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.select_action_federated_mab()
-        elif self.algorithm == "Enhanced_Federated_MAB":
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
             return self.select_action_enhanced_federated_mab()
         else:
             print(f"  ⚠️ Unknown algorithm {self.algorithm}, defaulting to MAB_Contextual")
@@ -509,6 +540,10 @@ class Vehicle:
             e['cache_hit_delay_sum'] = 0.0
         if 'cache_hit_delay_count' not in e:
             e['cache_hit_delay_count'] = 0
+        if 'energy_sum' not in e:
+            e['energy_sum'] = 0.0
+        if 'energy_count' not in e:
+            e['energy_count'] = 0
 
 
     def select_action_lru(self):
@@ -1441,10 +1476,12 @@ class Vehicle:
             return self.get_reward_popularity()
         elif self.algorithm == "MAB_Original":
             return self.get_reward_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.get_reward_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.get_reward_federated_mab()
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
+            return self.get_reward_enhanced_federated_mab()
         else:
             return self.get_reward_mab_original()  # Default
 
@@ -1565,7 +1602,11 @@ class Vehicle:
                         s = self._get_cache_size_ratio(ctype, ccat, cno)
                         s_norm = min(1.0, s)
 
-                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm)))
+                        avg_energy = float(e.get('energy_sum', 0.0)) / max(1, int(e.get('energy_count', 0)))
+                        energy_penalty = getattr(self, 'energy_lambda', 0.0) * (
+                            avg_energy / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+                        )
+                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm))) - energy_penalty
 
                         old = float(e.get('avg_reward', 0.0))
                         new = old + lr * (reward - old)
@@ -1595,6 +1636,15 @@ class Vehicle:
                                 content_info['q_value'] = federated_q
                             except:
                                 pass
+
+
+    def get_reward_enhanced_federated_mab(self):
+        """Enhanced federated reward path for vehicles.
+
+        Vehicles currently share the same reward update logic as federated MAB,
+        while enhanced behavior is handled by the aggregator side.
+        """
+        self.get_reward_federated_mab()
 
 
     def is_content_in_cache(self, coord, category, content_no):
@@ -1688,7 +1738,12 @@ class Vehicle:
         if ((slot - 1) % 10 == 0):
             if slot > 10:
                 # 🔧 FIX: Use federated_update based on algorithm
-                use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                use_federated = self.algorithm in [
+                    "Federated_MAB",
+                    "Federated_MAB_EnergyAware",
+                    "Enhanced_Federated_MAB",
+                    "Enhanced_Federated_MAB_EnergyAware",
+                ]
                 self.append_action_space(slot, federated_update=use_federated)  # 🟢 FIXED!
 
                 if len(self.action_space):

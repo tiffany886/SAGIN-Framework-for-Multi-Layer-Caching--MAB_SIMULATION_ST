@@ -1,0 +1,32 @@
+# 仿真输出与结果
+# results/
+batch*.log
+rerun*.log
+*.log
+delay_*.txt
+hit_ratio_analysis_*.csv
+hit_ratio_analysis_*.json
+alpha_hit_ratio_summary.csv
+all_delay_summary.csv
+comprehensive_summary_*.txt
+delay_analysis/
+delay_summary/
+paper_figures/
+fig_*.png
+fig_*.pdf
+*.xlsx
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 虚拟环境
+qeco2/
+venv/
+env/
+
+# 临时文件
+*.swp
+*.swo
+*~

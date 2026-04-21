@@ -7,7 +7,8 @@ import numpy as np
 
 
 class BaseStation:
-    def __init__(self, bs_id, bs_range, grid_size, aggregator, algorithm="MAB_Contextual"):
+    def __init__(self, bs_id, bs_range, grid_size, aggregator, algorithm="MAB_Contextual",
+                 energy_lambda=0.0):
         self.grid_size = grid_size
         self.bs_id = bs_id
         self.b_range = bs_range
@@ -19,7 +20,9 @@ class BaseStation:
         self.transmission_rate = 15  # Mbps
 
         # ✅ NEW: Algorithm selection
-        self.algorithm = algorithm
+        self.algorithm = str(algorithm).strip()
+        self.energy_lambda = energy_lambda
+        self.max_energy_per_request = 100.0
         print(f"  🏢 {self.bs_id} initialized with {self.algorithm} algorithm")
 
         # Initialize counters for requests generated per category and received content per category
@@ -672,11 +675,11 @@ class BaseStation:
             return self.get_reward_popularity()
         elif self.algorithm == "MAB_Original":
             return self.get_reward_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.get_reward_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.get_reward_federated_mab()
-        elif self.algorithm == "Enhanced_Federated_MAB":
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
             return self.get_reward_enhanced_federated_mab()  # ✅ ADD THIS LINE
         else:
             print(f"  ⚠️ Unknown algorithm {self.algorithm}, defaulting to MAB_Contextual")
@@ -765,7 +768,11 @@ class BaseStation:
                         rho = max(0.0, min(1.0, 1.0 - (age / 200.0)))
                         s = self._get_cache_size_ratio(ctype, ccat, cno)
                         s_norm = min(1.0, s)
-                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm)))
+                        avg_energy = float(e.get('energy_sum', 0.0)) / max(1, int(e.get('energy_count', 0)))
+                        energy_penalty = getattr(self, 'energy_lambda', 0.0) * (
+                            avg_energy / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+                        )
+                        reward = (w_base * base) + (w_ctx * ((w_beta * beta) + (w_rho * rho) + (w_s * s_norm))) - energy_penalty
                         old = float(e.get('avg_reward', 0.0))
                         new = old + lr * (reward - old)
                         e['avg_reward'] = new
@@ -967,7 +974,13 @@ class BaseStation:
                         if content['content_no'] == requested_content_no:
                             #print('hi-b4')
                             # ✅ FOUND - Track hit and return content
-                            self.track_content_hit(content, slot)
+                            energy_joule, normalized_energy, _ = communication.compute_retrieval_energy(
+                                content_request, 'vehicle_bs'
+                            )
+                            content_request['energy_joule'] = energy_joule
+                            content_request['energy_cost_joule'] = energy_joule
+                            content_request['normalized_energy'] = normalized_energy
+                            self.track_content_hit(content_request, content, slot, energy_joule=energy_joule)
                             #print(f" BS {self.bs_id} BS CACHE HIT: {search_key}")
                             return content
 
@@ -993,7 +1006,8 @@ class BaseStation:
         return None
 
 
-    def track_content_hit(self, content, slot, observed_delay_ms=None, from_cache=False):
+    def track_content_hit(self, content_request, content, slot, observed_delay_ms=None, from_cache=False,
+                          energy_joule=None):
         """Enhanced hit tracking with debug output"""
         content_type = content['content_type']
         content_coord = content['content_coord']
@@ -1011,6 +1025,15 @@ class BaseStation:
             if observed_delay_ms is not None:
                 self.record[content_type][content_coord][content_category][content_no]['cache_hit_delay_sum'] += float(observed_delay_ms)
                 self.record[content_type][content_coord][content_category][content_no]['cache_hit_delay_count'] += 1
+        if energy_joule is not None:
+            self.record[content_type][content_coord][content_category][content_no]['energy_sum'] += float(energy_joule)
+            self.record[content_type][content_coord][content_category][content_no]['energy_count'] += 1
+            content_request['energy_joule'] = float(energy_joule)
+            content_request['energy_cost_joule'] = float(energy_joule)
+            content_request['normalized_energy'] = min(
+                1.0,
+                float(energy_joule) / max(1e-6, float(getattr(self, 'max_energy_per_request', 100.0)))
+            )
         self.record[content_type][content_coord][content_category][content_no]['slot'] = slot
 
         total_hits = self.record[content_type][content_coord][content_category][content_no]['content_hit']
@@ -1075,7 +1098,12 @@ class BaseStation:
                     self.get_reward()
                 if slot > 10:
                     # 🔧 FIX: Use federated_update based on algorithm
-                    use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                    use_federated = self.algorithm in [
+                        "Federated_MAB",
+                        "Federated_MAB_EnergyAware",
+                        "Enhanced_Federated_MAB",
+                        "Enhanced_Federated_MAB_EnergyAware",
+                    ]
                     self.append_action_space(slot, federated_update=use_federated)  # 🟢 FIXED!
                     if len(self.action_space):
                         self.select_action()  # Calls MAB_Original
@@ -1203,7 +1231,12 @@ class BaseStation:
                                 0.007,
                                 0.01) + 2 * random.uniform(0.04, 0.06) + 2 * random.uniform(4, 6)
 
-                        use_federated = self.algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"]
+                        use_federated = self.algorithm in [
+                            "Federated_MAB",
+                            "Federated_MAB_EnergyAware",
+                            "Enhanced_Federated_MAB",
+                            "Enhanced_Federated_MAB_EnergyAware",
+                        ]
                         self.update_action_space(content, slot, federated_update=use_federated)
                         self.source_hit += 1
                         if flag == 0:
@@ -1281,6 +1314,8 @@ class BaseStation:
                                 'cache_path_reqs': 0,
                                 'cache_hit_delay_sum': 0.0,
                                 'cache_hit_delay_count': 0,
+                                'energy_sum': 0.0,
+                                'energy_count': 0,
             }
 
     def generate_content(self, communication, content_request):
@@ -1457,11 +1492,11 @@ class BaseStation:
             return self.select_action_popularity()
         elif self.algorithm == "MAB_Original":
             return self.select_action_mab_original()
-        elif self.algorithm == "MAB_Contextual":
+        elif self.algorithm in ["MAB_Contextual", "MAB_Contextual_EnergyAware"]:
             return self.select_action_mab_contextual()
-        elif self.algorithm == "Federated_MAB":
+        elif self.algorithm in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
             return self.select_action_federated_mab()
-        elif self.algorithm == "Enhanced_Federated_MAB":
+        elif self.algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
             return self.select_action_enhanced_federated_mab()
         else:
             print(f"  ⚠️ Unknown algorithm {self.algorithm}, defaulting to MAB_Contextual")

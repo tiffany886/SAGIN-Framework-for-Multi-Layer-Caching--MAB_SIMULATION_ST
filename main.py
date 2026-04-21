@@ -13,6 +13,7 @@ import argparse
 import json
 import pandas as pd
 import math
+import traceback
 from datetime import datetime
 import logging
 from tqdm import tqdm
@@ -34,13 +35,29 @@ from bs_ccn import BaseStation
 from gs_ccn import GroundStation
 
 
-def create_network(algorithm_type):
+def get_energy_lambda_for_algorithm(algorithm_type):
+    energy_lambda_map = {
+        'MAB_Contextual': 0.0,
+        'Federated_MAB': 0.0,
+        'Enhanced_Federated_MAB': 0.0,
+        'MAB_Contextual_EnergyAware': 0.2,
+        'Federated_MAB_EnergyAware': 0.2,
+        'Enhanced_Federated_MAB_EnergyAware': 0.2,
+    }
+    return energy_lambda_map.get(algorithm_type, 0.0)
+
+
+def create_network(algorithm_type, energy_lambda=None):
     """Create network components with specified algorithm"""
+    algorithm_type = str(algorithm_type).strip()
     logger.info(f"🗏️ Creating network for {algorithm_type}")
 
-    if algorithm_type == "Enhanced_Federated_MAB":
+    if energy_lambda is None:
+        energy_lambda = get_energy_lambda_for_algorithm(algorithm_type)
+
+    if algorithm_type in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
         aggregator = EnhancedFederatedAggregator()
-    elif algorithm_type == "Federated_MAB":
+    elif algorithm_type in ["Federated_MAB", "Federated_MAB_EnergyAware"]:
         aggregator = FederatedAggregator()
     else:
         aggregator = None  # LRU / Popularity / MAB_Original / MAB_Contextual
@@ -69,7 +86,8 @@ def create_network(algorithm_type):
 
     # Create UAVs with IDs UAV1..UAV{uav_count}
     for i in range(uav_count):
-        uav = UAV(f"UAV{i + 1}", grid_size, uav_grid_size, aggregator, algorithm=algorithm_type)
+        uav = UAV(f"UAV{i + 1}", grid_size, uav_grid_size, aggregator, algorithm=algorithm_type,
+                  energy_lambda=energy_lambda)
         uavs.append(uav)
 
     # --- set 2-D neighbors (top/bottom/left/right) like your earlier code ---
@@ -97,7 +115,8 @@ def create_network(algorithm_type):
     # Create vehicles
     vehicles = []
     for i in range(1, 10):
-        vehicle = Vehicle(f"Vehicle{i}", grid_size, 20, 2, aggregator, algorithm=algorithm_type)
+        vehicle = Vehicle(f"Vehicle{i}", grid_size, 20, 2, aggregator, algorithm=algorithm_type,
+                          energy_lambda=energy_lambda)
         vehicles.append(vehicle)
 
     # vehicles already created in a list called `vehicles`
@@ -119,7 +138,8 @@ def create_network(algorithm_type):
     # Create base stations
     base_stations = []
     for i in range(1, 1):
-        bs = BaseStation(f"BS{i}", 15, grid_size, aggregator, algorithm=algorithm_type)
+        bs = BaseStation(f"BS{i}", 15, grid_size, aggregator, algorithm=algorithm_type,
+                         energy_lambda=energy_lambda)
         base_stations.append(bs)
 
     # Setup UAV neighbors
@@ -161,6 +181,18 @@ def analyze_performance_EXACT(vehicles, uavs, base_stations, algorithm, alpha, t
     bs_source_hits = sum(b.source_hit for b in base_stations)
     bs_total_requests = sum(b.total_request for b in base_stations)
 
+    # Energy performance
+    total_energy_consumed = 0.0
+    total_energy_samples = 0
+    for node_group in (vehicles, uavs, base_stations):
+        for node in node_group:
+            for entity_type, coord_dict in getattr(node, 'record', {}).items():
+                for coord, category_dict in coord_dict.items():
+                    for category, content_no_dict in category_dict.items():
+                        for content_no, content_info in content_no_dict.items():
+                            total_energy_consumed += float(content_info.get('energy_sum', 0.0))
+                            total_energy_samples += int(content_info.get('energy_count', 0))
+
     # ====================================================================
     # EXACT CALCULATIONS FROM YOUR CODE
     # ====================================================================
@@ -168,7 +200,11 @@ def analyze_performance_EXACT(vehicles, uavs, base_stations, algorithm, alpha, t
     # Overall performance
     total_cache_hits = vehicle_cache_hits + uav_cache_hits + bs_cache_hits
     total_source_hits = vehicle_source_hits + uav_source_hits + bs_source_hits + uav_sagin_hits
+    # Keep initialized even if logic above is edited in future branches.
+    total_content_hits = 0
     total_content_hits = total_cache_hits + total_source_hits
+    avg_energy_per_request = total_energy_consumed / max(1, total_energy_samples)
+    energy_efficiency = total_content_hits / max(1e-6, total_energy_consumed)
 
     # Calculate hit ratios - EXACT same formula as your code
     vehicle_hit_ratio = ((vehicle_cache_hits + vehicle_source_hits) / max(1, vehicle_total_requests)) * 100
@@ -209,6 +245,12 @@ def analyze_performance_EXACT(vehicles, uavs, base_stations, algorithm, alpha, t
         'bs_cache_ratio': bs_cache_ratio,
         'overall_cache_ratio': overall_cache_ratio,
 
+        # Energy metrics
+        'avg_energy_per_request': avg_energy_per_request,
+        'energy_efficiency': energy_efficiency,
+        'total_energy_consumed': total_energy_consumed,
+        'energy_samples': total_energy_samples,
+
         # Raw data for verification
         'raw_data': {
             'vehicle': {
@@ -234,20 +276,24 @@ def analyze_performance_EXACT(vehicles, uavs, base_stations, algorithm, alpha, t
                 'total_cache_hits': total_cache_hits,
                 'total_source_hits': total_source_hits,
                 'total_content_hits': total_content_hits,
-                'total_requests': vehicle_total_requests + uav_total_requests + bs_total_requests
+                'total_requests': vehicle_total_requests + uav_total_requests + bs_total_requests,
+                'total_energy_consumed': total_energy_consumed,
+                'energy_samples': total_energy_samples,
             }
         }
     }
 
 
-def run_single_simulation(algorithm, alpha, time_slots, simulation_round=1):
+def run_single_simulation(algorithm, alpha, time_slots, simulation_round=1, output_root=None, run_subdir=None):
     """🎯 YOUR EXISTING WORKING SIMULATION - UNCHANGED"""
 
+    algorithm = str(algorithm).strip()
     start_time = time.time()
 
     # Create archive directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    archive_dir = Path("results") / timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    base_root = Path(output_root) if output_root else Path("results")
+    archive_dir = base_root / run_subdir if run_subdir else base_root / timestamp
     archive_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"📁 Created archive directory: {archive_dir}")
 
@@ -258,7 +304,8 @@ def run_single_simulation(algorithm, alpha, time_slots, simulation_round=1):
     logger.info("=" * 50)
 
     # Create network - YOUR EXISTING CODE
-    satellites, uavs, vehicles, base_stations, ground_station, aggregator = create_network(algorithm)
+    energy_lambda = get_energy_lambda_for_algorithm(algorithm)
+    satellites, uavs, vehicles, base_stations, ground_station, aggregator = create_network(algorithm, energy_lambda)
 
     # Create communication - YOUR EXISTING CODE
     communication = Communication(satellites, base_stations, vehicles, uavs, ground_station, alpha, simulation_round,
@@ -285,6 +332,13 @@ def run_single_simulation(algorithm, alpha, time_slots, simulation_round=1):
     for bs in base_stations:
         bs.current_alpha = alpha
         logger.info(f"   🏢 {bs.bs_id}: alpha={alpha}")
+        bs.energy_lambda = energy_lambda
+
+    for vehicle in vehicles:
+        vehicle.energy_lambda = energy_lambda
+
+    for uav in uavs:
+        uav.energy_lambda = energy_lambda
 
 
     # 🎯 YOUR EXISTING SIMULATION PARAMETERS - UNCHANGED
@@ -326,11 +380,16 @@ def run_single_simulation(algorithm, alpha, time_slots, simulation_round=1):
 
         # ✅ FIX: Add Enhanced_Federated_MAB to condition
         #print(f"slottt{slot}, condition={(slot - 1) % 10 == 0}")
-        if algorithm in ["Federated_MAB", "Enhanced_Federated_MAB"] and slot > 10 and ((slot - 1) % 10 == 0):
+        if algorithm in [
+            "Federated_MAB",
+            "Federated_MAB_EnergyAware",
+            "Enhanced_Federated_MAB",
+            "Enhanced_Federated_MAB_EnergyAware",
+        ] and slot > 10 and ((slot - 1) % 10 == 0):
             logger.debug(f"🔍 TRIGGERING aggregate_updates() for {algorithm} at slot {slot}")  # ADD THIS
             aggregator.aggregate_updates()
         else:
-            if algorithm == "Enhanced_Federated_MAB":
+            if algorithm in ["Enhanced_Federated_MAB", "Enhanced_Federated_MAB_EnergyAware"]:
                 logger.debug(f"🔍 NOT TRIGGERING: algorithm={algorithm}, slot={slot}, condition={(slot - 1) % 10 == 0}")
 
                 # ✅ Communication processing - YOUR EXISTING CODE
@@ -355,7 +414,7 @@ def save_results_to_files(results, archive_dir=None):
         logger.error("❌ No results to save!")
         return
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
     # Use archive_dir if provided, else current directory
     base_dir = Path(archive_dir) if archive_dir else Path(".")
@@ -392,12 +451,20 @@ def save_results_to_files(results, archive_dir=None):
             'bs_cache_ratio': result['bs_cache_ratio'],
             'overall_cache_ratio': result['overall_cache_ratio'],
 
+            # ✅ ENERGY METRICS
+            'avg_energy_per_request': result.get('avg_energy_per_request', 0.0),
+            'energy_efficiency': result.get('energy_efficiency', 0.0),
+            'total_energy_consumed': result.get('total_energy_consumed', 0.0),
+            'energy_samples': result.get('energy_samples', 0),
+
             # Raw verification data
             'Vehicle_Cache_Hits': result['raw_data']['vehicle']['cache_hits'],
             'UAV_Cache_Hits': result['raw_data']['uav']['cache_hits'],
             'BS_Cache_Hits': result['raw_data']['bs']['cache_hits'],
             'Total_Cache_Hits': result['raw_data']['overall']['total_cache_hits'],
-            'Total_Requests': result['raw_data']['overall']['total_requests']
+            'Total_Requests': result['raw_data']['overall']['total_requests'],
+            'Total_Energy_Consumed': result['raw_data']['overall'].get('total_energy_consumed', 0.0),
+            'Energy_Samples': result['raw_data']['overall'].get('energy_samples', 0),
         }
         csv_data.append(row)
 
@@ -411,19 +478,62 @@ def save_results_to_files(results, archive_dir=None):
     # ====================================================================
     # CONSOLE OUTPUT - SUMMARY TABLE
     # ====================================================================
-    print(f"\n📋 HIT RATIO & CACHE RATIO SUMMARY")
-    print("=" * 140)
+    print(f"\n📋 HIT RATIO, CACHE RATIO & ENERGY SUMMARY")
+    print("=" * 175)
     print(
-        f"{'Algorithm':<15} {'Alpha':<6} {'VehHit%':<8} {'UAVHit%':<8} {'BSHit%':<8} {'Overall%':<9} {'VehCache%':<10} {'UAVCache%':<10} {'BSCache%':<10} {'OverCache%':<11}")
-    print("-" * 140)
+        f"{'Algorithm':<15} {'Alpha':<6} {'VehHit%':<8} {'UAVHit%':<8} {'BSHit%':<8} {'Overall%':<9} {'VehCache%':<10} {'UAVCache%':<10} {'BSCache%':<10} {'OverCache%':<11} {'AvgEnergy':<10} {'Eff':<8}")
+    print("-" * 175)
 
     for result in results:
         print(f"{result['algorithm']:<15} {result['alpha']:<6.2f} "
               f"{result['vehicle_hit_ratio']:<8.4f} {result['uav_hit_ratio']:<8.4f} {result['bs_hit_ratio']:<8.4f} {result['overall_hit_ratio']:<9.4f} "
-              f"{result['vehicle_cache_ratio']:<10.4f} {result['uav_cache_ratio']:<10.4f} {result['bs_cache_ratio']:<10.4f} {result['overall_cache_ratio']:<11.4f}")
+              f"{result['vehicle_cache_ratio']:<10.4f} {result['uav_cache_ratio']:<10.4f} {result['bs_cache_ratio']:<10.4f} {result['overall_cache_ratio']:<11.4f} "
+              f"{result.get('avg_energy_per_request', 0.0):<10.4f} {result.get('energy_efficiency', 0.0):<8.4f}")
 
 
-def run_batch_analysis():
+def _config_key(algorithm, alpha, time_slots):
+    return f"{str(algorithm).strip()}|{float(alpha):.6f}|{int(time_slots)}"
+
+
+def _extract_performance_records_from_json(json_path):
+    records = []
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and {'algorithm', 'alpha', 'time_slots'}.issubset(item.keys()):
+                    records.append(item)
+        elif isinstance(data, dict) and {'algorithm', 'alpha', 'time_slots'}.issubset(data.keys()):
+            records.append(data)
+    except Exception:
+        logger.exception("Failed to parse existing batch result JSON: %s", json_path)
+    return records
+
+
+def _load_existing_batch_results(batch_archive_dir):
+    loaded_by_key = {}
+
+    # 1) Load per-run outputs from run_* directories (new layout).
+    for run_dir in sorted(Path(batch_archive_dir).glob("run_*")):
+        if not run_dir.is_dir():
+            continue
+        for json_file in sorted(run_dir.glob("hit_ratio_analysis_*.json")):
+            for rec in _extract_performance_records_from_json(json_file):
+                key = _config_key(rec['algorithm'], rec['alpha'], rec['time_slots'])
+                loaded_by_key[key] = rec
+
+    # 2) Also load existing batch summary JSON(s) for compatibility.
+    for summary_json in sorted(Path(batch_archive_dir).glob("hit_ratio_analysis_*.json")):
+        for rec in _extract_performance_records_from_json(summary_json):
+            key = _config_key(rec['algorithm'], rec['alpha'], rec['time_slots'])
+            if key not in loaded_by_key:
+                loaded_by_key[key] = rec
+
+    return loaded_by_key
+
+
+def run_batch_analysis(resume_batch_dir=None):
     """🎯 BATCH ANALYSIS FOR ALL ALGORITHMS AND ALPHA VALUES"""
 
     print(f"\n🎯 BATCH HIT RATIO ANALYSIS")
@@ -432,11 +542,27 @@ def run_batch_analysis():
     # Configuration - YOUR REQUIREMENTS
     #algorithms = ['LRU', 'Popularity', 'MAB_Original', 'MAB_Contextual', 'Enhanced_Federated_MAB']  # ✅ 5 algorithms
     #algorithms =['LRU']
-    algorithms = ['MAB_Contextual']
+    algorithms = [
+        'LRU',
+        'Popularity',
+        'MAB_Original',
+        'MAB_Contextual',
+        'MAB_Contextual_EnergyAware',
+        'Federated_MAB',
+        'Federated_MAB_EnergyAware',
+        'Enhanced_Federated_MAB',
+        'Enhanced_Federated_MAB_EnergyAware',
+    ]
     alpha_values = [0.25, 0.5, 1.0, 2.0]  # ✅ All alpha values
     time_slots_options = [300]  # ✅ All simulation slots
 
-    total_configs = len(algorithms) * len(alpha_values) * len(time_slots_options)
+    all_configs = [
+        (algorithm, alpha, time_slots)
+        for alpha in alpha_values
+        for time_slots in time_slots_options
+        for algorithm in algorithms
+    ]
+    total_configs = len(all_configs)
 
     print(f"📊 Configuration:")
     print(f"   • Algorithms: {len(algorithms)} ({', '.join(algorithms)})")
@@ -451,55 +577,84 @@ def run_batch_analysis():
     #     return None
     response = 'y'
 
-    batch_results = []
-    batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    batch_archive_dir = Path("results") / f"batch_{batch_timestamp}"
-    batch_archive_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"📁 Created batch summary directory: {batch_archive_dir}")
+    existing_results_by_key = {}
+    if resume_batch_dir:
+        batch_archive_dir = Path(resume_batch_dir)
+        if not batch_archive_dir.exists():
+            raise FileNotFoundError(f"Resume batch directory not found: {batch_archive_dir}")
+        existing_results_by_key = _load_existing_batch_results(batch_archive_dir)
+        logger.info(f"📁 Resuming batch summary directory: {batch_archive_dir}")
+        logger.info(f"📦 Found {len(existing_results_by_key)} completed configurations")
+    else:
+        batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        batch_archive_dir = Path("results") / f"batch_{batch_timestamp}"
+        batch_archive_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"📁 Created batch summary directory: {batch_archive_dir}")
+
+    completed_keys = set(existing_results_by_key.keys())
+    pending_configs = [cfg for cfg in all_configs if _config_key(*cfg) not in completed_keys]
+
+    print(f"   • Already completed: {len(completed_keys)}")
+    print(f"   • Pending: {len(pending_configs)}")
+
+    batch_results = list(existing_results_by_key.values())
 
     config_count = 0
     start_time = time.time()
 
-    for alpha in alpha_values:  # ✅ All alpha values
-        for time_slots in time_slots_options:  # ✅ All simulation slots
-            for algorithm in algorithms:  # ✅ 5 algorithms
-                config_count += 1
+    for algorithm, alpha, time_slots in pending_configs:
+        config_count += 1
 
-                print(f"\n⚙️ Configuration {config_count}/{total_configs}")
-                print(f"   🔄 α={alpha} | slots={time_slots} | {algorithm}")
+        print(f"\n⚙️ Configuration {len(completed_keys) + config_count}/{total_configs}")
+        print(f"   🔄 α={alpha} | slots={time_slots} | {algorithm}")
 
-                try:
-                    # 🎯 RUN YOUR EXISTING WORKING SIMULATION
-                    performance, sim_archive_dir = run_single_simulation(algorithm, alpha, time_slots)
+        try:
+            # 🎯 RUN YOUR EXISTING WORKING SIMULATION
+            run_folder = f"run_{len(completed_keys) + config_count:03d}_{algorithm}_a{alpha}_t{time_slots}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            performance, sim_archive_dir = run_single_simulation(
+                algorithm,
+                alpha,
+                time_slots,
+                output_root=batch_archive_dir,
+                run_subdir=run_folder,
+            )
 
-                    if performance:
-                        performance['config_id'] = config_count
-                        performance['timestamp'] = datetime.now().isoformat()
-                        batch_results.append(performance)
+            if performance:
+                performance['config_id'] = len(completed_keys) + config_count
+                performance['timestamp'] = datetime.now().isoformat()
+                batch_results.append(performance)
 
-                        # Save each run's hit-ratio files to its own run archive directory.
-                        save_results_to_files([performance], sim_archive_dir)
+                # Save each run's hit-ratio files to its own run archive directory.
+                save_results_to_files([performance], sim_archive_dir)
 
-                        # Show key results
-                        print(f"      ✅ Vehicle Hit: {performance['vehicle_hit_ratio']:.4f}%")
-                        print(f"      ✅ UAV Hit: {performance['uav_hit_ratio']:.4f}%")
-                        print(f"      ✅ BS Hit: {performance['bs_hit_ratio']:.4f}%")
-                        print(f"      ✅ Overall Hit: {performance['overall_hit_ratio']:.4f}%")
-                        print(f"      ✅ Vehicle Cache: {performance['vehicle_cache_ratio']:.4f}%")
-                        print(f"      ✅ UAV Cache: {performance['uav_cache_ratio']:.4f}%")
-                        print(f"      ✅ BS Cache: {performance['bs_cache_ratio']:.4f}%")
-                        print(f"      ✅ Overall Cache: {performance['overall_cache_ratio']:.4f}%")
-                    else:
-                        print(f"      ❌ Simulation failed")
+                # Show key results
+                print(f"      ✅ Vehicle Hit: {performance['vehicle_hit_ratio']:.4f}%")
+                print(f"      ✅ UAV Hit: {performance['uav_hit_ratio']:.4f}%")
+                print(f"      ✅ BS Hit: {performance['bs_hit_ratio']:.4f}%")
+                print(f"      ✅ Overall Hit: {performance['overall_hit_ratio']:.4f}%")
+                print(f"      ✅ Vehicle Cache: {performance['vehicle_cache_ratio']:.4f}%")
+                print(f"      ✅ UAV Cache: {performance['uav_cache_ratio']:.4f}%")
+                print(f"      ✅ BS Cache: {performance['bs_cache_ratio']:.4f}%")
+                print(f"      ✅ Overall Cache: {performance['overall_cache_ratio']:.4f}%")
+            else:
+                print(f"      ❌ Simulation failed")
 
-                    # Progress update
-                    elapsed = time.time() - start_time
-                    remaining = (elapsed / config_count) * (total_configs - config_count)
-                    print(f"      ⏱️ Elapsed: {elapsed / 60:.1f}min | Est. remaining: {remaining / 60:.1f}min")
+            # Progress update
+            elapsed = time.time() - start_time
+            remaining_runs = len(pending_configs) - config_count
+            remaining = (elapsed / max(1, config_count)) * remaining_runs
+            print(f"      ⏱️ Elapsed: {elapsed / 60:.1f}min | Est. remaining: {remaining / 60:.1f}min")
 
-                except Exception as e:
-                    print(f"      ❌ Error: {e}")
-                    continue
+        except Exception as e:
+            print(f"      ❌ Error: {e}")
+            logger.exception(
+                "Batch config failed: algorithm=%s alpha=%s slots=%s",
+                algorithm,
+                alpha,
+                time_slots,
+            )
+            traceback.print_exc()
+            continue
 
     # Save batch summary (all runs) to a separate batch summary directory.
     if batch_results:
@@ -531,7 +686,9 @@ def main():
 
     # Single simulation mode
     parser.add_argument('--algorithm', type=str,
-                        choices=['LRU', 'Popularity', 'MAB_Original', 'MAB_Contextual', 'Federated_MAB', 'Enhanced_Federated_MAB'],
+                        choices=['LRU', 'Popularity', 'MAB_Original', 'MAB_Contextual', 'MAB_Contextual_EnergyAware',
+                                 'Federated_MAB', 'Federated_MAB_EnergyAware', 'Enhanced_Federated_MAB',
+                                 'Enhanced_Federated_MAB_EnergyAware'],
                         help='Algorithm for single simulation')
     parser.add_argument('--alpha', type=float, help='Zipf alpha parameter')
     parser.add_argument('--time_slots', type=int, help='Number of time slots')
@@ -539,6 +696,8 @@ def main():
     # Batch mode
     parser.add_argument('--batch', action='store_true',
                         help='Run batch analysis across all algorithms and parameters')
+    parser.add_argument('--resume_batch_dir', type=str,
+                        help='Resume an existing batch directory, e.g. results/batch_20260419_120000')
 
     args = parser.parse_args()
 
@@ -549,7 +708,7 @@ def main():
     try:
         if args.batch:
             # Batch mode - ALL ALGORITHMS, ALL ALPHA VALUES, ALL SIMULATION SLOTS
-            run_batch_analysis()
+            run_batch_analysis(args.resume_batch_dir)
 
         elif args.algorithm and args.alpha is not None and args.time_slots:
             # Single simulation mode
