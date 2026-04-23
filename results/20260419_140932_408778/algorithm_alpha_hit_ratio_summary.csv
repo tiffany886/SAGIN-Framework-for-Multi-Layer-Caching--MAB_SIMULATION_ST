@@ -1,0 +1,2 @@
+algorithm,alpha,count,vehicle_hit_avg,uav_hit_avg,bs_hit_avg,overall_hit_avg,vehicle_cache_avg,uav_cache_avg,bs_cache_avg,overall_cache_avg
+LRU,0.2500,1,7.8724,73.9225,0.0000,26.2660,1.9830,68.8655,0.0000,66.2739

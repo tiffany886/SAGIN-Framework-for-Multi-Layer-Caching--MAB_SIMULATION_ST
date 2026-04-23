@@ -16,6 +16,29 @@ from collections import defaultdict
 import pandas as pd
 
 
+def discover_json_files(timestamp=None):
+    """Discover hit ratio JSON files from both legacy and new batch/runs layouts."""
+    patterns = []
+
+    if timestamp:
+        base = f'results/{timestamp}'
+        patterns.extend([
+            f'{base}/hit_ratio_analysis_*.json',
+            f'{base}/runs/run_*/hit_ratio_analysis_*.json',
+        ])
+    else:
+        patterns.extend([
+            'results/*/hit_ratio_analysis_*.json',
+            'results/*/runs/run_*/hit_ratio_analysis_*.json',
+        ])
+
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(pattern))
+
+    return sorted(set(files))
+
+
 def main():
     parser = argparse.ArgumentParser(description='提取命中率并按 α 汇总')
     parser.add_argument('--timestamp', type=str,
@@ -23,20 +46,19 @@ def main():
     args = parser.parse_args()
 
     if args.timestamp:
-        json_pattern = f'results/{args.timestamp}/hit_ratio_analysis_*.json'
         output_dir = f'results/{args.timestamp}'
     else:
-        json_pattern = 'results/*/hit_ratio_analysis_*.json'
         output_dir = '.'
 
-    json_files = glob.glob(json_pattern)
+    json_files = discover_json_files(args.timestamp)
     if not json_files:
-        print(f"❌ 未找到匹配的 JSON 文件，模式: {json_pattern}")
+        print("❌ 未找到匹配的 JSON 文件。")
         return
 
     print(f"🔍 找到 {len(json_files)} 个 JSON 文件")
 
     alpha_data = defaultdict(list)
+    algorithm_alpha_data = defaultdict(list)
 
     for fpath in json_files:
         try:
@@ -49,11 +71,13 @@ def main():
                     record = data
 
                 alpha = record.get('alpha')
+                algorithm = record.get('algorithm', 'unknown')
                 if alpha is None:
                     continue
 
-                alpha_data[alpha].append({
-                    'algorithm': record.get('algorithm', 'unknown'),
+                row = {
+                    'algorithm': algorithm,
+                    'alpha': alpha,
                     'vehicle_hit': record.get('vehicle_hit_ratio', 0.0),
                     'uav_hit': record.get('uav_hit_ratio', 0.0),
                     'bs_hit': record.get('bs_hit_ratio', 0.0),
@@ -62,7 +86,10 @@ def main():
                     'uav_cache': record.get('uav_cache_ratio', 0.0),
                     'bs_cache': record.get('bs_cache_ratio', 0.0),
                     'overall_cache': record.get('overall_cache_ratio', 0.0),
-                })
+                }
+
+                alpha_data[alpha].append(row)
+                algorithm_alpha_data[(algorithm, alpha)].append(row)
         except Exception as e:
             print(f"⚠️ 读取文件失败 {fpath}: {e}")
 
@@ -95,6 +122,31 @@ def main():
     csv_file = os.path.join(output_dir, 'alpha_hit_ratio_summary.csv')
     df.to_csv(csv_file, index=False, float_format='%.4f')
     print(f"💾 已保存汇总 CSV: {csv_file}")
+
+    # 计算每个 Algorithm + α 的平均值
+    algo_alpha_rows = []
+    for (algorithm, alpha) in sorted(algorithm_alpha_data.keys(), key=lambda x: (x[0], x[1])):
+        items = algorithm_alpha_data[(algorithm, alpha)]
+        n = len(items)
+        avg = {
+            'algorithm': algorithm,
+            'alpha': alpha,
+            'count': n,
+            'vehicle_hit_avg': sum(x['vehicle_hit'] for x in items) / n,
+            'uav_hit_avg': sum(x['uav_hit'] for x in items) / n,
+            'bs_hit_avg': sum(x['bs_hit'] for x in items) / n,
+            'overall_hit_avg': sum(x['overall_hit'] for x in items) / n,
+            'vehicle_cache_avg': sum(x['vehicle_cache'] for x in items) / n,
+            'uav_cache_avg': sum(x['uav_cache'] for x in items) / n,
+            'bs_cache_avg': sum(x['bs_cache'] for x in items) / n,
+            'overall_cache_avg': sum(x['overall_cache'] for x in items) / n,
+        }
+        algo_alpha_rows.append(avg)
+
+    algo_alpha_df = pd.DataFrame(algo_alpha_rows)
+    algo_alpha_csv = os.path.join(output_dir, 'algorithm_alpha_hit_ratio_summary.csv')
+    algo_alpha_df.to_csv(algo_alpha_csv, index=False, float_format='%.4f')
+    print(f"💾 已保存汇总 CSV: {algo_alpha_csv}")
 
     print("\n📊 各 α 值下的平均命中率（单位：%）：")
     print("-" * 70)

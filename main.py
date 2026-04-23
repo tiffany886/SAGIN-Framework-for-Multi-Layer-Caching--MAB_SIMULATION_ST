@@ -490,9 +490,104 @@ def save_results_to_files(results, archive_dir=None):
               f"{result['vehicle_cache_ratio']:<10.4f} {result['uav_cache_ratio']:<10.4f} {result['bs_cache_ratio']:<10.4f} {result['overall_cache_ratio']:<11.4f} "
               f"{result.get('avg_energy_per_request', 0.0):<10.4f} {result.get('energy_efficiency', 0.0):<8.4f}")
 
+    return {
+        'json': str(json_filepath),
+        'csv': str(csv_filepath),
+    }
+
+
+def save_batch_summary_files(results, summary_dir):
+    """Save one deterministic batch summary in summary_dir."""
+    summary_dir = Path(summary_dir)
+    summary_dir.mkdir(parents=True, exist_ok=True)
+
+    json_filepath = summary_dir / "hit_ratio_analysis_all.json"
+    csv_filepath = summary_dir / "hit_ratio_analysis_all.csv"
+
+    with open(json_filepath, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+
+    csv_data = []
+    for result in results:
+        csv_data.append({
+            'Algorithm': result['algorithm'],
+            'Alpha': result['alpha'],
+            'Time_Slots': result['time_slots'],
+            'vehicle_hit_ratio': result['vehicle_hit_ratio'],
+            'uav_hit_ratio': result['uav_hit_ratio'],
+            'bs_hit_ratio': result['bs_hit_ratio'],
+            'overall_hit_ratio': result['overall_hit_ratio'],
+            'vehicle_cache_ratio': result['vehicle_cache_ratio'],
+            'uav_cache_ratio': result['uav_cache_ratio'],
+            'bs_cache_ratio': result['bs_cache_ratio'],
+            'overall_cache_ratio': result['overall_cache_ratio'],
+            'avg_energy_per_request': result.get('avg_energy_per_request', 0.0),
+            'energy_efficiency': result.get('energy_efficiency', 0.0),
+            'total_energy_consumed': result.get('total_energy_consumed', 0.0),
+            'energy_samples': result.get('energy_samples', 0),
+            'Vehicle_Cache_Hits': result['raw_data']['vehicle']['cache_hits'],
+            'UAV_Cache_Hits': result['raw_data']['uav']['cache_hits'],
+            'BS_Cache_Hits': result['raw_data']['bs']['cache_hits'],
+            'Total_Cache_Hits': result['raw_data']['overall']['total_cache_hits'],
+            'Total_Requests': result['raw_data']['overall']['total_requests'],
+            'Total_Energy_Consumed': result['raw_data']['overall'].get('total_energy_consumed', 0.0),
+            'Energy_Samples': result['raw_data']['overall'].get('energy_samples', 0),
+        })
+
+    pd.DataFrame(csv_data).to_csv(csv_filepath, index=False)
+
+    return {
+        'json': str(json_filepath),
+        'csv': str(csv_filepath),
+    }
+
 
 def _config_key(algorithm, alpha, time_slots):
     return f"{str(algorithm).strip()}|{float(alpha):.6f}|{int(time_slots)}"
+
+
+def _manifest_path(batch_archive_dir):
+    return Path(batch_archive_dir) / "manifest.json"
+
+
+def _load_manifest(batch_archive_dir):
+    path = _manifest_path(batch_archive_dir)
+    if not path.exists():
+        return None
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except Exception:
+        logger.exception("Failed to load manifest: %s", path)
+        return None
+
+
+def _save_manifest(batch_archive_dir, manifest):
+    path = _manifest_path(batch_archive_dir)
+    with open(path, 'w') as f:
+        json.dump(manifest, f, indent=2, default=str)
+
+
+def _init_manifest(batch_archive_dir, algorithms, alpha_values, time_slots_options):
+    return {
+        'batch_id': Path(batch_archive_dir).name,
+        'created_at': datetime.now().isoformat(),
+        'updated_at': datetime.now().isoformat(),
+        'status': 'running',
+        'config': {
+            'algorithms': algorithms,
+            'alpha_values': alpha_values,
+            'time_slots_options': time_slots_options,
+            'total_planned': len(algorithms) * len(alpha_values) * len(time_slots_options),
+        },
+        'paths': {
+            'runs_dir': str(Path(batch_archive_dir) / 'runs'),
+            'summary_dir': str(Path(batch_archive_dir) / 'summary'),
+            'analysis_dir': str(Path(batch_archive_dir) / 'analysis'),
+        },
+        'summary_files': {},
+        'configs': {},
+    }
 
 
 def _extract_performance_records_from_json(json_path):
@@ -515,7 +610,8 @@ def _load_existing_batch_results(batch_archive_dir):
     loaded_by_key = {}
 
     # 1) Load per-run outputs from run_* directories (new layout).
-    for run_dir in sorted(Path(batch_archive_dir).glob("run_*")):
+    runs_dir = Path(batch_archive_dir) / "runs"
+    for run_dir in sorted(runs_dir.glob("run_*")):
         if not run_dir.is_dir():
             continue
         for json_file in sorted(run_dir.glob("hit_ratio_analysis_*.json")):
@@ -578,10 +674,20 @@ def run_batch_analysis(resume_batch_dir=None):
     response = 'y'
 
     existing_results_by_key = {}
+    manifest = None
     if resume_batch_dir:
         batch_archive_dir = Path(resume_batch_dir)
         if not batch_archive_dir.exists():
             raise FileNotFoundError(f"Resume batch directory not found: {batch_archive_dir}")
+
+        (batch_archive_dir / "runs").mkdir(parents=True, exist_ok=True)
+        (batch_archive_dir / "summary").mkdir(parents=True, exist_ok=True)
+        (batch_archive_dir / "analysis").mkdir(parents=True, exist_ok=True)
+
+        manifest = _load_manifest(batch_archive_dir)
+        if manifest is None:
+            manifest = _init_manifest(batch_archive_dir, algorithms, alpha_values, time_slots_options)
+
         existing_results_by_key = _load_existing_batch_results(batch_archive_dir)
         logger.info(f"📁 Resuming batch summary directory: {batch_archive_dir}")
         logger.info(f"📦 Found {len(existing_results_by_key)} completed configurations")
@@ -589,7 +695,17 @@ def run_batch_analysis(resume_batch_dir=None):
         batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         batch_archive_dir = Path("results") / f"batch_{batch_timestamp}"
         batch_archive_dir.mkdir(parents=True, exist_ok=True)
+        (batch_archive_dir / "runs").mkdir(parents=True, exist_ok=True)
+        (batch_archive_dir / "summary").mkdir(parents=True, exist_ok=True)
+        (batch_archive_dir / "analysis").mkdir(parents=True, exist_ok=True)
         logger.info(f"📁 Created batch summary directory: {batch_archive_dir}")
+        manifest = _init_manifest(batch_archive_dir, algorithms, alpha_values, time_slots_options)
+
+    manifest['updated_at'] = datetime.now().isoformat()
+    _save_manifest(batch_archive_dir, manifest)
+
+    runs_dir = batch_archive_dir / "runs"
+    summary_dir = batch_archive_dir / "summary"
 
     completed_keys = set(existing_results_by_key.keys())
     pending_configs = [cfg for cfg in all_configs if _config_key(*cfg) not in completed_keys]
@@ -604,18 +720,31 @@ def run_batch_analysis(resume_batch_dir=None):
 
     for algorithm, alpha, time_slots in pending_configs:
         config_count += 1
+        cfg_key = _config_key(algorithm, alpha, time_slots)
+        run_folder = f"run_{len(completed_keys) + config_count:03d}_{algorithm}_a{alpha}_t{time_slots}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        run_dir = runs_dir / run_folder
+
+        manifest['configs'][cfg_key] = {
+            'status': 'running',
+            'algorithm': algorithm,
+            'alpha': alpha,
+            'time_slots': time_slots,
+            'run_dir': str(run_dir),
+            'started_at': datetime.now().isoformat(),
+        }
+        manifest['updated_at'] = datetime.now().isoformat()
+        _save_manifest(batch_archive_dir, manifest)
 
         print(f"\n⚙️ Configuration {len(completed_keys) + config_count}/{total_configs}")
         print(f"   🔄 α={alpha} | slots={time_slots} | {algorithm}")
 
         try:
             # 🎯 RUN YOUR EXISTING WORKING SIMULATION
-            run_folder = f"run_{len(completed_keys) + config_count:03d}_{algorithm}_a{alpha}_t{time_slots}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
             performance, sim_archive_dir = run_single_simulation(
                 algorithm,
                 alpha,
                 time_slots,
-                output_root=batch_archive_dir,
+                output_root=runs_dir,
                 run_subdir=run_folder,
             )
 
@@ -625,7 +754,14 @@ def run_batch_analysis(resume_batch_dir=None):
                 batch_results.append(performance)
 
                 # Save each run's hit-ratio files to its own run archive directory.
-                save_results_to_files([performance], sim_archive_dir)
+                run_files = save_results_to_files([performance], sim_archive_dir)
+
+                manifest['configs'][cfg_key].update({
+                    'status': 'completed',
+                    'finished_at': datetime.now().isoformat(),
+                    'hit_json': run_files['json'],
+                    'hit_csv': run_files['csv'],
+                })
 
                 # Show key results
                 print(f"      ✅ Vehicle Hit: {performance['vehicle_hit_ratio']:.4f}%")
@@ -653,12 +789,23 @@ def run_batch_analysis(resume_batch_dir=None):
                 alpha,
                 time_slots,
             )
+            manifest['configs'][cfg_key].update({
+                'status': 'failed',
+                'finished_at': datetime.now().isoformat(),
+                'error': str(e),
+            })
+            manifest['updated_at'] = datetime.now().isoformat()
+            _save_manifest(batch_archive_dir, manifest)
             traceback.print_exc()
             continue
 
+        manifest['updated_at'] = datetime.now().isoformat()
+        _save_manifest(batch_archive_dir, manifest)
+
     # Save batch summary (all runs) to a separate batch summary directory.
     if batch_results:
-        save_results_to_files(batch_results, batch_archive_dir)
+        summary_files = save_batch_summary_files(batch_results, summary_dir)
+        manifest['summary_files'] = summary_files
 
         # Algorithm ranking
         print(f"\n🏆 ALGORITHM RANKING BY OVERALL HIT RATIO:")
@@ -677,6 +824,23 @@ def run_batch_analysis(resume_batch_dir=None):
         for algorithm, stats in algo_stats.iterrows():
             print(f"{rank}. {algorithm:<15} | Avg: {stats['mean']:6.4f}% ± {stats['std']:5.4f}%")
             rank += 1
+
+    success_count = sum(1 for c in manifest['configs'].values() if c.get('status') == 'completed')
+    fail_count = sum(1 for c in manifest['configs'].values() if c.get('status') == 'failed')
+    manifest['status'] = 'completed' if fail_count == 0 else 'completed_with_errors'
+    manifest['updated_at'] = datetime.now().isoformat()
+    manifest['final_stats'] = {
+        'planned': total_configs,
+        'completed': success_count,
+        'failed': fail_count,
+        'pending': max(0, total_configs - success_count - fail_count),
+    }
+    _save_manifest(batch_archive_dir, manifest)
+
+    print("\n📦 Batch output layout:")
+    print(f"   • Runs: {runs_dir}")
+    print(f"   • Summary: {summary_dir}")
+    print(f"   • Manifest: {_manifest_path(batch_archive_dir)}")
 
     return batch_results
 

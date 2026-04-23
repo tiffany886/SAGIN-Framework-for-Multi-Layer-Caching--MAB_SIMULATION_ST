@@ -1,0 +1,386 @@
+{
+  "batch_id": "batch_20260421_220745",
+  "created_at": "2026-04-21T22:07:45.793869",
+  "updated_at": "2026-04-23T10:22:28.055663",
+  "status": "running",
+  "config": {
+    "algorithms": [
+      "LRU",
+      "Popularity",
+      "MAB_Original",
+      "MAB_Contextual",
+      "MAB_Contextual_EnergyAware",
+      "Federated_MAB",
+      "Federated_MAB_EnergyAware",
+      "Enhanced_Federated_MAB",
+      "Enhanced_Federated_MAB_EnergyAware"
+    ],
+    "alpha_values": [
+      0.25,
+      0.5,
+      1.0,
+      2.0
+    ],
+    "time_slots_options": [
+      300
+    ],
+    "total_planned": 36
+  },
+  "paths": {
+    "runs_dir": "results/batch_20260421_220745/runs",
+    "summary_dir": "results/batch_20260421_220745/summary",
+    "analysis_dir": "results/batch_20260421_220745/analysis"
+  },
+  "summary_files": {},
+  "configs": {
+    "LRU|0.250000|300": {
+      "status": "completed",
+      "algorithm": "LRU",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_001_LRU_a0.25_t300_20260421_220745_797868",
+      "started_at": "2026-04-21T22:07:45.797896",
+      "finished_at": "2026-04-21T22:10:52.238935",
+      "hit_json": "results/batch_20260421_220745/runs/run_001_LRU_a0.25_t300_20260421_220745_797868/hit_ratio_analysis_20260421_221052_229150.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_001_LRU_a0.25_t300_20260421_220745_797868/hit_ratio_analysis_20260421_221052_229150.csv"
+    },
+    "Popularity|0.250000|300": {
+      "status": "completed",
+      "algorithm": "Popularity",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_002_Popularity_a0.25_t300_20260421_221052_242791",
+      "started_at": "2026-04-21T22:10:52.242818",
+      "finished_at": "2026-04-21T23:31:05.488207",
+      "hit_json": "results/batch_20260421_220745/runs/run_002_Popularity_a0.25_t300_20260421_221052_242791/hit_ratio_analysis_20260421_233105_478098.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_002_Popularity_a0.25_t300_20260421_221052_242791/hit_ratio_analysis_20260421_233105_478098.csv"
+    },
+    "MAB_Original|0.250000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Original",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_003_MAB_Original_a0.25_t300_20260421_233105_492316",
+      "started_at": "2026-04-21T23:31:05.492348",
+      "finished_at": "2026-04-21T23:34:09.660220",
+      "hit_json": "results/batch_20260421_220745/runs/run_003_MAB_Original_a0.25_t300_20260421_233105_492316/hit_ratio_analysis_20260421_233409_650582.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_003_MAB_Original_a0.25_t300_20260421_233105_492316/hit_ratio_analysis_20260421_233409_650582.csv"
+    },
+    "MAB_Contextual|0.250000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_004_MAB_Contextual_a0.25_t300_20260421_233409_664357",
+      "started_at": "2026-04-21T23:34:09.664390",
+      "finished_at": "2026-04-22T00:56:31.163413",
+      "hit_json": "results/batch_20260421_220745/runs/run_004_MAB_Contextual_a0.25_t300_20260421_233409_664357/hit_ratio_analysis_20260422_005631_153475.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_004_MAB_Contextual_a0.25_t300_20260421_233409_664357/hit_ratio_analysis_20260422_005631_153475.csv"
+    },
+    "MAB_Contextual_EnergyAware|0.250000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual_EnergyAware",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_005_MAB_Contextual_EnergyAware_a0.25_t300_20260422_005631_167429",
+      "started_at": "2026-04-22T00:56:31.167459",
+      "finished_at": "2026-04-22T02:34:00.816932",
+      "hit_json": "results/batch_20260421_220745/runs/run_005_MAB_Contextual_EnergyAware_a0.25_t300_20260422_005631_167429/hit_ratio_analysis_20260422_023400_809300.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_005_MAB_Contextual_EnergyAware_a0.25_t300_20260422_005631_167429/hit_ratio_analysis_20260422_023400_809300.csv"
+    },
+    "Federated_MAB|0.250000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_006_Federated_MAB_a0.25_t300_20260422_023400_821676",
+      "started_at": "2026-04-22T02:34:00.821710",
+      "finished_at": "2026-04-22T04:44:27.105505",
+      "hit_json": "results/batch_20260421_220745/runs/run_006_Federated_MAB_a0.25_t300_20260422_023400_821676/hit_ratio_analysis_20260422_044427_095326.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_006_Federated_MAB_a0.25_t300_20260422_023400_821676/hit_ratio_analysis_20260422_044427_095326.csv"
+    },
+    "Federated_MAB_EnergyAware|0.250000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB_EnergyAware",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_007_Federated_MAB_EnergyAware_a0.25_t300_20260422_044427_109856",
+      "started_at": "2026-04-22T04:44:27.109890",
+      "finished_at": "2026-04-22T06:26:34.397363",
+      "hit_json": "results/batch_20260421_220745/runs/run_007_Federated_MAB_EnergyAware_a0.25_t300_20260422_044427_109856/hit_ratio_analysis_20260422_062634_387451.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_007_Federated_MAB_EnergyAware_a0.25_t300_20260422_044427_109856/hit_ratio_analysis_20260422_062634_387451.csv"
+    },
+    "Enhanced_Federated_MAB|0.250000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_008_Enhanced_Federated_MAB_a0.25_t300_20260422_062634_401569",
+      "started_at": "2026-04-22T06:26:34.401601",
+      "finished_at": "2026-04-22T08:01:08.562886",
+      "hit_json": "results/batch_20260421_220745/runs/run_008_Enhanced_Federated_MAB_a0.25_t300_20260422_062634_401569/hit_ratio_analysis_20260422_080108_553702.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_008_Enhanced_Federated_MAB_a0.25_t300_20260422_062634_401569/hit_ratio_analysis_20260422_080108_553702.csv"
+    },
+    "Enhanced_Federated_MAB_EnergyAware|0.250000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB_EnergyAware",
+      "alpha": 0.25,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_009_Enhanced_Federated_MAB_EnergyAware_a0.25_t300_20260422_080108_566528",
+      "started_at": "2026-04-22T08:01:08.566561",
+      "finished_at": "2026-04-22T09:39:00.537071",
+      "hit_json": "results/batch_20260421_220745/runs/run_009_Enhanced_Federated_MAB_EnergyAware_a0.25_t300_20260422_080108_566528/hit_ratio_analysis_20260422_093900_527390.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_009_Enhanced_Federated_MAB_EnergyAware_a0.25_t300_20260422_080108_566528/hit_ratio_analysis_20260422_093900_527390.csv"
+    },
+    "LRU|0.500000|300": {
+      "status": "completed",
+      "algorithm": "LRU",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_010_LRU_a0.5_t300_20260422_093900_540777",
+      "started_at": "2026-04-22T09:39:00.540810",
+      "finished_at": "2026-04-22T09:41:53.306285",
+      "hit_json": "results/batch_20260421_220745/runs/run_010_LRU_a0.5_t300_20260422_093900_540777/hit_ratio_analysis_20260422_094153_296815.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_010_LRU_a0.5_t300_20260422_093900_540777/hit_ratio_analysis_20260422_094153_296815.csv"
+    },
+    "Popularity|0.500000|300": {
+      "status": "completed",
+      "algorithm": "Popularity",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_011_Popularity_a0.5_t300_20260422_094153_310537",
+      "started_at": "2026-04-22T09:41:53.310565",
+      "finished_at": "2026-04-22T11:28:35.756157",
+      "hit_json": "results/batch_20260421_220745/runs/run_011_Popularity_a0.5_t300_20260422_094153_310537/hit_ratio_analysis_20260422_112835_747197.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_011_Popularity_a0.5_t300_20260422_094153_310537/hit_ratio_analysis_20260422_112835_747197.csv"
+    },
+    "MAB_Original|0.500000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Original",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_012_MAB_Original_a0.5_t300_20260422_112835_760265",
+      "started_at": "2026-04-22T11:28:35.760296",
+      "finished_at": "2026-04-22T11:31:39.945944",
+      "hit_json": "results/batch_20260421_220745/runs/run_012_MAB_Original_a0.5_t300_20260422_112835_760265/hit_ratio_analysis_20260422_113139_937906.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_012_MAB_Original_a0.5_t300_20260422_112835_760265/hit_ratio_analysis_20260422_113139_937906.csv"
+    },
+    "MAB_Contextual|0.500000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_013_MAB_Contextual_a0.5_t300_20260422_113139_949550",
+      "started_at": "2026-04-22T11:31:39.949580",
+      "finished_at": "2026-04-22T13:05:50.827569",
+      "hit_json": "results/batch_20260421_220745/runs/run_013_MAB_Contextual_a0.5_t300_20260422_113139_949550/hit_ratio_analysis_20260422_130550_817969.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_013_MAB_Contextual_a0.5_t300_20260422_113139_949550/hit_ratio_analysis_20260422_130550_817969.csv"
+    },
+    "MAB_Contextual_EnergyAware|0.500000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual_EnergyAware",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_014_MAB_Contextual_EnergyAware_a0.5_t300_20260422_130550_831210",
+      "started_at": "2026-04-22T13:05:50.831240",
+      "finished_at": "2026-04-22T15:09:20.195617",
+      "hit_json": "results/batch_20260421_220745/runs/run_014_MAB_Contextual_EnergyAware_a0.5_t300_20260422_130550_831210/hit_ratio_analysis_20260422_150920_186064.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_014_MAB_Contextual_EnergyAware_a0.5_t300_20260422_130550_831210/hit_ratio_analysis_20260422_150920_186064.csv"
+    },
+    "Federated_MAB|0.500000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_015_Federated_MAB_a0.5_t300_20260422_150920_199070",
+      "started_at": "2026-04-22T15:09:20.199098",
+      "finished_at": "2026-04-22T16:38:00.611402",
+      "hit_json": "results/batch_20260421_220745/runs/run_015_Federated_MAB_a0.5_t300_20260422_150920_199070/hit_ratio_analysis_20260422_163800_601315.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_015_Federated_MAB_a0.5_t300_20260422_150920_199070/hit_ratio_analysis_20260422_163800_601315.csv"
+    },
+    "Federated_MAB_EnergyAware|0.500000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB_EnergyAware",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_016_Federated_MAB_EnergyAware_a0.5_t300_20260422_163800_615219",
+      "started_at": "2026-04-22T16:38:00.615250",
+      "finished_at": "2026-04-22T18:02:33.752772",
+      "hit_json": "results/batch_20260421_220745/runs/run_016_Federated_MAB_EnergyAware_a0.5_t300_20260422_163800_615219/hit_ratio_analysis_20260422_180233_743048.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_016_Federated_MAB_EnergyAware_a0.5_t300_20260422_163800_615219/hit_ratio_analysis_20260422_180233_743048.csv"
+    },
+    "Enhanced_Federated_MAB|0.500000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_017_Enhanced_Federated_MAB_a0.5_t300_20260422_180233_756847",
+      "started_at": "2026-04-22T18:02:33.756882",
+      "finished_at": "2026-04-22T19:16:13.182394",
+      "hit_json": "results/batch_20260421_220745/runs/run_017_Enhanced_Federated_MAB_a0.5_t300_20260422_180233_756847/hit_ratio_analysis_20260422_191613_169230.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_017_Enhanced_Federated_MAB_a0.5_t300_20260422_180233_756847/hit_ratio_analysis_20260422_191613_169230.csv"
+    },
+    "Enhanced_Federated_MAB_EnergyAware|0.500000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB_EnergyAware",
+      "alpha": 0.5,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_018_Enhanced_Federated_MAB_EnergyAware_a0.5_t300_20260422_191613_187871",
+      "started_at": "2026-04-22T19:16:13.187917",
+      "finished_at": "2026-04-22T20:50:39.884446",
+      "hit_json": "results/batch_20260421_220745/runs/run_018_Enhanced_Federated_MAB_EnergyAware_a0.5_t300_20260422_191613_187871/hit_ratio_analysis_20260422_205039_875760.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_018_Enhanced_Federated_MAB_EnergyAware_a0.5_t300_20260422_191613_187871/hit_ratio_analysis_20260422_205039_875760.csv"
+    },
+    "LRU|1.000000|300": {
+      "status": "completed",
+      "algorithm": "LRU",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_019_LRU_a1.0_t300_20260422_205039_888236",
+      "started_at": "2026-04-22T20:50:39.888265",
+      "finished_at": "2026-04-22T20:53:36.335944",
+      "hit_json": "results/batch_20260421_220745/runs/run_019_LRU_a1.0_t300_20260422_205039_888236/hit_ratio_analysis_20260422_205336_327161.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_019_LRU_a1.0_t300_20260422_205039_888236/hit_ratio_analysis_20260422_205336_327161.csv"
+    },
+    "Popularity|1.000000|300": {
+      "status": "completed",
+      "algorithm": "Popularity",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_020_Popularity_a1.0_t300_20260422_205336_339776",
+      "started_at": "2026-04-22T20:53:36.339812",
+      "finished_at": "2026-04-22T22:33:39.673491",
+      "hit_json": "results/batch_20260421_220745/runs/run_020_Popularity_a1.0_t300_20260422_205336_339776/hit_ratio_analysis_20260422_223339_664003.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_020_Popularity_a1.0_t300_20260422_205336_339776/hit_ratio_analysis_20260422_223339_664003.csv"
+    },
+    "MAB_Original|1.000000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Original",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_021_MAB_Original_a1.0_t300_20260422_223339_677223",
+      "started_at": "2026-04-22T22:33:39.677255",
+      "finished_at": "2026-04-22T22:36:36.897238",
+      "hit_json": "results/batch_20260421_220745/runs/run_021_MAB_Original_a1.0_t300_20260422_223339_677223/hit_ratio_analysis_20260422_223636_889121.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_021_MAB_Original_a1.0_t300_20260422_223339_677223/hit_ratio_analysis_20260422_223636_889121.csv"
+    },
+    "MAB_Contextual|1.000000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_022_MAB_Contextual_a1.0_t300_20260422_223636_901209",
+      "started_at": "2026-04-22T22:36:36.901235",
+      "finished_at": "2026-04-23T00:18:57.542590",
+      "hit_json": "results/batch_20260421_220745/runs/run_022_MAB_Contextual_a1.0_t300_20260422_223636_901209/hit_ratio_analysis_20260423_001857_533619.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_022_MAB_Contextual_a1.0_t300_20260422_223636_901209/hit_ratio_analysis_20260423_001857_533619.csv"
+    },
+    "MAB_Contextual_EnergyAware|1.000000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual_EnergyAware",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_023_MAB_Contextual_EnergyAware_a1.0_t300_20260423_001857_547193",
+      "started_at": "2026-04-23T00:18:57.547220",
+      "finished_at": "2026-04-23T01:42:16.264341",
+      "hit_json": "results/batch_20260421_220745/runs/run_023_MAB_Contextual_EnergyAware_a1.0_t300_20260423_001857_547193/hit_ratio_analysis_20260423_014216_256059.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_023_MAB_Contextual_EnergyAware_a1.0_t300_20260423_001857_547193/hit_ratio_analysis_20260423_014216_256059.csv"
+    },
+    "Federated_MAB|1.000000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_024_Federated_MAB_a1.0_t300_20260423_014216_268103",
+      "started_at": "2026-04-23T01:42:16.268131",
+      "finished_at": "2026-04-23T02:55:32.611594",
+      "hit_json": "results/batch_20260421_220745/runs/run_024_Federated_MAB_a1.0_t300_20260423_014216_268103/hit_ratio_analysis_20260423_025532_602304.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_024_Federated_MAB_a1.0_t300_20260423_014216_268103/hit_ratio_analysis_20260423_025532_602304.csv"
+    },
+    "Federated_MAB_EnergyAware|1.000000|300": {
+      "status": "completed",
+      "algorithm": "Federated_MAB_EnergyAware",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_025_Federated_MAB_EnergyAware_a1.0_t300_20260423_025532_616119",
+      "started_at": "2026-04-23T02:55:32.616147",
+      "finished_at": "2026-04-23T04:21:12.667308",
+      "hit_json": "results/batch_20260421_220745/runs/run_025_Federated_MAB_EnergyAware_a1.0_t300_20260423_025532_616119/hit_ratio_analysis_20260423_042112_657449.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_025_Federated_MAB_EnergyAware_a1.0_t300_20260423_025532_616119/hit_ratio_analysis_20260423_042112_657449.csv"
+    },
+    "Enhanced_Federated_MAB|1.000000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_026_Enhanced_Federated_MAB_a1.0_t300_20260423_042112_689330",
+      "started_at": "2026-04-23T04:21:12.689374",
+      "finished_at": "2026-04-23T05:34:35.377018",
+      "hit_json": "results/batch_20260421_220745/runs/run_026_Enhanced_Federated_MAB_a1.0_t300_20260423_042112_689330/hit_ratio_analysis_20260423_053435_360150.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_026_Enhanced_Federated_MAB_a1.0_t300_20260423_042112_689330/hit_ratio_analysis_20260423_053435_360150.csv"
+    },
+    "Enhanced_Federated_MAB_EnergyAware|1.000000|300": {
+      "status": "completed",
+      "algorithm": "Enhanced_Federated_MAB_EnergyAware",
+      "alpha": 1.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_027_Enhanced_Federated_MAB_EnergyAware_a1.0_t300_20260423_053435_391183",
+      "started_at": "2026-04-23T05:34:35.391224",
+      "finished_at": "2026-04-23T07:33:05.121206",
+      "hit_json": "results/batch_20260421_220745/runs/run_027_Enhanced_Federated_MAB_EnergyAware_a1.0_t300_20260423_053435_391183/hit_ratio_analysis_20260423_073305_111126.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_027_Enhanced_Federated_MAB_EnergyAware_a1.0_t300_20260423_053435_391183/hit_ratio_analysis_20260423_073305_111126.csv"
+    },
+    "LRU|2.000000|300": {
+      "status": "completed",
+      "algorithm": "LRU",
+      "alpha": 2.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_028_LRU_a2.0_t300_20260423_073305_126158",
+      "started_at": "2026-04-23T07:33:05.126188",
+      "finished_at": "2026-04-23T07:36:07.249595",
+      "hit_json": "results/batch_20260421_220745/runs/run_028_LRU_a2.0_t300_20260423_073305_126158/hit_ratio_analysis_20260423_073607_241322.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_028_LRU_a2.0_t300_20260423_073305_126158/hit_ratio_analysis_20260423_073607_241322.csv"
+    },
+    "Popularity|2.000000|300": {
+      "status": "completed",
+      "algorithm": "Popularity",
+      "alpha": 2.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_029_Popularity_a2.0_t300_20260423_073607_253442",
+      "started_at": "2026-04-23T07:36:07.253471",
+      "finished_at": "2026-04-23T08:53:34.892255",
+      "hit_json": "results/batch_20260421_220745/runs/run_029_Popularity_a2.0_t300_20260423_073607_253442/hit_ratio_analysis_20260423_085334_873027.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_029_Popularity_a2.0_t300_20260423_073607_253442/hit_ratio_analysis_20260423_085334_873027.csv"
+    },
+    "MAB_Original|2.000000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Original",
+      "alpha": 2.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_030_MAB_Original_a2.0_t300_20260423_085334_896865",
+      "started_at": "2026-04-23T08:53:34.896899",
+      "finished_at": "2026-04-23T08:56:34.305441",
+      "hit_json": "results/batch_20260421_220745/runs/run_030_MAB_Original_a2.0_t300_20260423_085334_896865/hit_ratio_analysis_20260423_085634_295950.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_030_MAB_Original_a2.0_t300_20260423_085334_896865/hit_ratio_analysis_20260423_085634_295950.csv"
+    },
+    "MAB_Contextual|2.000000|300": {
+      "status": "completed",
+      "algorithm": "MAB_Contextual",
+      "alpha": 2.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_031_MAB_Contextual_a2.0_t300_20260423_085634_310096",
+      "started_at": "2026-04-23T08:56:34.310131",
+      "finished_at": "2026-04-23T10:22:28.051973",
+      "hit_json": "results/batch_20260421_220745/runs/run_031_MAB_Contextual_a2.0_t300_20260423_085634_310096/hit_ratio_analysis_20260423_102228_043341.json",
+      "hit_csv": "results/batch_20260421_220745/runs/run_031_MAB_Contextual_a2.0_t300_20260423_085634_310096/hit_ratio_analysis_20260423_102228_043341.csv"
+    },
+    "MAB_Contextual_EnergyAware|2.000000|300": {
+      "status": "running",
+      "algorithm": "MAB_Contextual_EnergyAware",
+      "alpha": 2.0,
+      "time_slots": 300,
+      "run_dir": "results/batch_20260421_220745/runs/run_032_MAB_Contextual_EnergyAware_a2.0_t300_20260423_102228_055628",
+      "started_at": "2026-04-23T10:22:28.055659"
+    }
+  }
+}
